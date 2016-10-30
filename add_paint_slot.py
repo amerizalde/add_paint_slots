@@ -13,7 +13,7 @@ bl_info = {
         "description" :
             "Add Paint Slots to a Material while in Texture Paint mode. You still have to hook them up in the Node Editor!",
         "warning" : "",
-        "wiki_url" : "",
+        "wiki_url" : "https://github.com/amerizalde/add_paint_slots",
         "tracker_url" : "",
         "category" : "Paint"}
 
