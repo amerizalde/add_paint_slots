@@ -2,6 +2,18 @@ import bpy, os
 
 from bpy.types import Panel, Operator
 
+bl_info = {
+         "name" : "Additional Texture Slots",
+         "author" : "Andrew Merizalde <andrewmerizalde@hotmail.com>",
+         "version" : (1, 0, 1),
+         "blender" : (2, 7, 8),
+         "location" : "View 3D > Texture Paint > Tool Shelf > Slots",
+         "description" :
+             "Add Paint Slots to a Material while in Texture Paint mode. You still have to hook them up in the Node Editor!",
+         "warning" : "",
+         "wiki_url" : "https://github.com/amerizalde/add_paint_slots",
+         "tracker_url" : "",
+         "category" : "Paint"}
     
 # callback to add a texture to the active material and add a paint slot in Texture Paint mode
 class SlotsOperator(Operator):
