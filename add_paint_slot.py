@@ -1,46 +1,72 @@
-# https://www.blender.org/api/blender_python_api_2_78_1/bpy.ops.paint.html?highlight=bpy%20ops%20paint#module-bpy.ops.paint
-# https://en.wikibooks.org/wiki/Blender_3D:_Noob_to_Pro/Advanced_Tutorials/Python_Scripting/Addon_User_Interface#Space_Types.2C_Region_Types.2C_Contexts.2C_Oh_My.21
+import bpy, os
 
-import bpy
 from bpy.types import Panel, Operator
 
-bl_info = {
-        "name" : "Additional Texture Slots",
-        "author" : "Andrew Merizalde <andrewmerizalde@hotmail.com>",
-        "version" : (1, 0, 0),
-        "blender" : (2, 7, 8),
-        "location" : "View 3D > Texture Paint > Tool Shelf > Slots",
-        "description" :
-            "Add Paint Slots to a Material while in Texture Paint mode. You still have to hook them up in the Node Editor!",
-        "warning" : "",
-        "wiki_url" : "https://github.com/amerizalde/add_paint_slots",
-        "tracker_url" : "",
-        "category" : "Paint"}
-
-# add a texture to the active material
+    
+# callback to add a texture to the active material and add a paint slot in Texture Paint mode
 class SlotsOperator(Operator):
-    # the callback name
-    bl_idname = "alm.add_paint_slot"
-    bl_label = "..."
+    bl_idname = "alm.paint_slots"
+    bl_label = "Add Paint Slots"
     
     def execute(self, context):
-        u_color = (
-            context.scene.new_texture_color[0],
-            context.scene.new_texture_color[1],
-            context.scene.new_texture_color[2],
-            1.0)
+        bpy.ops.paint.add_texture_paint_slot(type="DIFFUSE_COLOR")
+        self.report({'INFO'}, "Texture Created!")
         
-        bpy.ops.paint.add_texture_paint_slot(
-            type="DIFFUSE_COLOR",
-            name=context.scene.new_texture_name,
-            width=context.scene.new_texture_width,
-            height=context.scene.new_texture_height,
-            color=u_color,
-            alpha=context.scene.new_texture_alpha,
-            float=context.scene.new_texture_float)
-        
-        self.report({'INFO'}, "Done!")        
         return {"FINISHED"}
+    
+# callback to save the active paint slot's texture
+class SaveOperator(Operator):
+    bl_idname = "alm.save_image"
+    bl_label = "SaveImage"
+    
+    # 'pointers' for the invoke method to populate
+    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+    filename = bpy.props.StringProperty(subtype="FILE_NAME")
+    directory = bpy.props.StringProperty(subtype="DIR_PATH")
+    
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None
+    
+    def get_active_image(self, context):
+        active_slot = context.object.active_material.paint_active_slot
+        return context.object.active_material.texture_paint_images[active_slot]
+    
+    def path_exists(self, image_path):
+        ipath = bpy.path.abspath(image_path)
+        if os.path.exists(ipath):
+            return True
+        
+    def execute(self, context):
+        slot_image = self.get_active_image(context)
+        
+        # swap area type
+        area = bpy.context.area
+        old_type, area.type = area.type, "IMAGE_EDITOR"
+        context.space_data.image = slot_image
+        
+        # function
+        if slot_image.filepath == '':
+            bpy.ops.image.save_as(filepath=self.filepath)
+            self.report({'INFO'}, "{} saved!".format(slot_image.filepath))
+        else:
+            bpy.ops.image.save_dirty()
+
+        # replace area type
+        area.type = old_type
+        
+        return {"FINISHED"}
+    
+    
+    def invoke(self, context, event):
+        slot_image = self.get_active_image(context)
+        
+        if slot_image.filepath == '' or not self.path_exists(slot_image.filepath):
+            context.window_manager.fileselect_add(self)
+        else:
+            self.execute(context)
+    
+        return {'RUNNING_MODAL'}
 
 
 # custom Toolshelf Panel
@@ -64,92 +90,24 @@ class View3DPanel(Panel):
         str_add_slot = "Add another texture to " + obj.name
         row.label(text=str_add_slot)
         
-        # properties
-        row = layout.row()
-        row.prop(context.scene, "new_texture_name")
-
-        row = layout.row()
-        row.prop(context.scene, "new_texture_width")
-
-        row = layout.row()
-        row.prop(context.scene, "new_texture_height")
-
-        row = layout.row()
-        row.prop(context.scene, "new_texture_color")
-
-        row = layout.row()
-        row.prop(context.scene, "new_texture_alpha")
-
-        row = layout.row()
-        row.prop(context.scene, "new_texture_float")
-
         # Add a custom operator
         row = layout.row()
-        row.operator("alm.add_paint_slot", text="Add Texture", icon="FACESEL_HLT")
+        row.operator("alm.paint_slots", text="Add Texture", icon="FACESEL_HLT")
+        
+        row = layout.row()
+        row.operator("alm.save_image", text="Save Dirty", icon="IMAGE_DATA")
         
     
 def register():
     bpy.utils.register_class(SlotsOperator)
+    bpy.utils.register_class(SaveOperator)
     bpy.utils.register_class(View3DPanel)
-    
-    bpy.types.Scene.new_texture_name = bpy.props.StringProperty(
-        name="Name",
-        description="Describe this texture.",
-        default="Texture",
-        maxlen=256,
-        options={'ANIMATABLE', 'TEXTEDIT_UPDATE'})
-        
-    bpy.types.Scene.new_texture_width = bpy.props.IntProperty(
-        name="Width",
-        description="The width of the texture.",
-        default=2048,
-        step=8,
-        options={'ANIMATABLE', 'TEXTEDIT_UPDATE'},
-        subtype='PIXEL')
-
-    bpy.types.Scene.new_texture_height = bpy.props.IntProperty(
-        name="Height",
-        description="The height of the texture.",
-        default=2048,
-        step=8,
-        options={'ANIMATABLE', 'TEXTEDIT_UPDATE'},
-        subtype='PIXEL')
-
-    bpy.types.Scene.new_texture_color = bpy.props.FloatVectorProperty(
-        name="Color",
-        description="Fill color of the texture",
-        default=(0.0, 0.0, 0.0),
-        min=0.0,
-        max=1.0,
-        soft_min=0.0,
-        soft_max=1.0,
-        step=0.001,
-        precision=3,
-        options={'ANIMATABLE'},
-        subtype='COLOR')
-        
-    bpy.types.Scene.new_texture_alpha = bpy.props.BoolProperty(
-        name="Alpha",
-        description="Include an alpha channel?",
-        default=False)
-        
-    bpy.types.Scene.new_texture_float = bpy.props.BoolProperty(
-        name="32 bit Float",
-        description="Create image with 32 bit floating point bit depth.",
-        default=False)
 
     
 def unregister():
     bpy.utils.unregister_class(View3DPanel)
     bpy.utils.unregister_class(SlotsOperator)
-    
-    # remove properties created
-    del bpy.types.Scene.new_texture_name
-    del bpy.types.Scene.new_texture_width
-    del bpy.types.Scene.new_texture_height
-    del bpy.types.Scene.new_texture_color
-    del bpy.types.Scene.new_texture_alpha
-    del bpy.types.Scene.new_texture_float
+    bpy.utils.unregister_class(SaveOperator)
 
 
 if __name__ == "__main__":
